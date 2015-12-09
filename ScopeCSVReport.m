@@ -20,8 +20,7 @@ function ScopeCSVReport
 % Created by: Raj Vinjamuri
 %
 % Revisions:
-% 20151028  RV  Creation of file
-% 20151201  RV  Refactor into functions and subfunctions
+% 20151028  RV  Creation of file (not complete)
 %
 %
 % TO DO:
@@ -36,13 +35,19 @@ function ScopeCSVReport
 % Generate number of plots dependent on number of channels
 % Increase the window size from default window size of plots
 % Add ink saver as option to prompt/dialog
+% Change errors to include error dialog boxes (msgbox with error flag)
+% Change warnings to include warning dialog boxes (msgbox with warning flag)
+% Handle empty channels (eg. Ch1,2,4 used and 3 unused) data sets
+% Seek for time in multiple columns for other scopes
 % -------------------------------------------------------------------
 
-%% Clear the workspace and console 
+%% Clear the workspace 
 clear all %#ok<CLSCR>
-clc
+% clc
 
 %% TO DO - incomplete: Give user dialog box of how-to or instructions
+% All prompts are being replaced by a comprehensive GUI (in progress)
+% Example time to read 4 channel 100k record file (30.6MB) - raw/num/text
 howTitle = 'HOW-TO';
 howText = 'Have UUT Serial Data ready (or just give a name to data).; Order excel files via name in same order as serial data entry. Reading the files may take time.';
 uiwait(msgbox(howText,howTitle,'modal'));
@@ -90,8 +95,16 @@ if (numFiles > 1)
     end
     
     %Get all the file names
+    
     % Returns a struct of files with name.date.bytes.isdir.datenum
-    fName = dir(fullfile(dirName,'*.csv'));
+    files = dir(fullfile(dirName,'*.csv'));
+    %sort alphabetically
+    %(dir sorts already but puts uppercase letters before lowercase)
+    fName = files.name; %temp grab of file names
+    [~, fid] = sort(lower(fName)); %lower changes the array to lowercase so ignore the output
+    fName = fName(fid);
+    
+    
 
 % User wants to process single file
 elseif (numFiles == 1)
@@ -123,18 +136,48 @@ else
     error(error2);
 end
 
-%% Read non-data contents and keep track of position where data starts
-% ONLY CODED FOR ONE FILE SO FAR %
 
+%Read file to workspace
+[Ch1Dat, Ch2Dat, Ch3Dat, Ch4Dat] = readCSVFile(fName);
+
+% Plot Figure(s) with subplot for each Channel
+plotSingleCSV(fName, serialInput, 0, Ch1Dat,Ch2Dat, Ch3Dat, Ch4Dat);
+
+end %END ScopeCSVReport (main function)
+
+
+
+%% ------------------------------------------------------------------
+% function readCSVFile description:
+%
+% Reads a single file and returns usable workspace data
+% Read non-data contents and keep track of position where data starts 
+% *To be completed*
+%
+% -------------------------------------------------------------------
+function [Ch1Dat, Ch2Dat, Ch3Dat, Ch4Dat] = readCSVFile(fName)
 %Read file (num contains all numbers, txt contains all text, and raw is a
 %           cell matrix of the entire file)
+
+% tic
+% disp(fName)
+% [raw,~,headerLinesOut] = importdata(fName,',',40);
+% toc
+% disp(raw)
+% disp(headerLinesOut)
+
+tic
 [num,txt,raw] = xlsread(fName);
+toc
+%[~,~,raw] = xlsread(fName); this cut off ~2 seconds for a 100k for 4Chan
 display(sprintf('Done reading csv file %s',fName));
 %Find data characteristics
 numCh = (size(raw,2)-1); %number of channels (one column each for X and Y of data
 hInd = 0; chDatInd = 0; dataInd = 0; labelInd = 0; %initialize
+
 %for loop used rather than a "find()" since datasets can be very large
-    % hUnits = txt(find(strcmp('horizontal units',txt))); alternative
+%    Note: we search through the 'txt' string array rather than 'raw' cell
+%    array since it is smaller than 'raw'
 for i=1:50 %50 arbitrarily chosen as more than enough to find header
     if (strcmpi('Horizontal Units',txt(i)))
         hInd = i; %where header info we care about starts
@@ -147,6 +190,8 @@ for i=1:50 %50 arbitrarily chosen as more than enough to find header
         break
     end
 end
+
+% hUnits = txt(find(strcmp('horizontal units',txt))); alternative example
 hUnits = cell2mat(raw(hInd,2));
 hScale = cell2mat(raw(hInd+1,2));
 hDelay = cell2mat(raw(hInd+2,2));
@@ -154,27 +199,45 @@ sampleInterval = cell2mat(raw(hInd+3,2));
 dataLength = cell2mat(raw(hInd+4,2));
 display(sprintf('Done grabbing header data for %s',fName));
 
-%% Get ChaNnel dependent info
+% Get Channel dependent info
 chAtten = cell2mat(raw(chDatInd+1,2:numCh+1));
 chVUnits = raw(chDatInd+2,2:numCh+1);
 chVOffset = cell2mat(raw(chDatInd+3,2:numCh+1));
 chVScale = cell2mat(raw(chDatInd+4,2:numCh+1));
 chLabel = raw(chDatInd+5,2:numCh+1);
 
-%% HOW TO READ DATA - Illustrative (not used since we can just reference raw)
+% READ DATA - Illustrative (not final implementation)
+% !!!Note that this requires four channels of data!!!
 Ch1Dat = cell2mat( raw(dataInd:end,[1,2]) );
 Ch2Dat = cell2mat( raw(dataInd:end,[1,3]) );
 Ch3Dat = cell2mat( raw(dataInd:end,[1,4]) );
 Ch4Dat = cell2mat( raw(dataInd:end,[1,5]) );
 
-%% Plot Figures for each Channel
-chCol = ['k' 'c' 'm' 'g']; %black, cyan, magenta, green
-fig1 = figure;
-inkSaver = 0; %Set to 0 black background; 1 for white bg
+end %END readCSVFile()
+
+
+
+
+%% ------------------------------------------------------------------
+% function plotSingleCSV description:
+%
+% *To be done*
+%
+% -------------------------------------------------------------------
+function plotSingleCSV(fName, serialInput, inkSaver, ...
+    Ch1Dat,Ch2Dat, Ch3Dat, Ch4Dat)
+
+%Setup Figure
+scrsz = get(groot,'ScreenSize'); % get screen size
+fig = figure('position',[100 40 scrsz(3)/2 scrsz(4)-150], ... %take most of left side of screen
+    'name',sprintf('Plot of %s (s/n: %d)',fName, serialInput)); %Window title
+chCol = ['k' 'c' 'm' 'g']; %line colors: black, cyan, magenta, green
 if (inkSaver == 0) 
-    whitebg(fig1);
-    chCol(1) = 'y';
+    whitebg(fig); %toggle figure bg from white to black/grey
+    chCol(1) = 'y'; %change Ch1 from black to yellow #BlackAndYellow
 end
+
+% Plot
 hold on;
 subplot(4,1,1);
 plot(Ch1Dat(:,1),Ch1Dat(:,2),chCol(1));
@@ -184,8 +247,7 @@ subplot(4,1,3);
 plot(Ch3Dat(:,1),Ch3Dat(:,2),chCol(3));
 subplot(4,1,4);
 plot(Ch4Dat(:,1),Ch4Dat(:,2),chCol(4));
+% NEEDS LABELS AND CONTEXT INFO
 
-
-end %END OF MAIN FUNCTION
-
+end %END plotSingleCSV()
 
