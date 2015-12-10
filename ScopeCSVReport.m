@@ -32,13 +32,19 @@ function ScopeCSVReport
 % Add labels to plots based on channel data
 %     Y-Axis (channel info read)
 %     X-Axis (time and time scale read)
-% Generate number of plots dependent on number of channels
-% Increase the window size from default window size of plots
 % Add ink saver as option to prompt/dialog
 % Change errors to include error dialog boxes (msgbox with error flag)
 % Change warnings to include warning dialog boxes (msgbox with warning flag)
-% Handle empty channels (eg. Ch1,2,4 used and 3 unused) data sets
 % Seek for time in multiple columns for other scopes
+% Output statistics with histogram like in minitab
+%
+%
+%
+%
+% DONE (many features just added on the fly and not lsited):
+% Handle empty channels (eg. Ch1,2,4 used and 3 unused) data sets
+% Increase the window size from default window size of plots
+% Generate number of plots dependent on number of channels
 % -------------------------------------------------------------------
 
 %% Clear the workspace 
@@ -138,10 +144,32 @@ end
 
 
 %Read file to workspace
-[Ch1Dat, Ch2Dat, Ch3Dat, Ch4Dat] = readCSVFile(fName);
+disp('Reading...');
+tic
+fOut = readCSVFile(fName);
+toc
+display(sprintf('Done reading csv file %s',fName));
 
 % Plot Figure(s) with subplot for each Channel
-plotSingleCSV(fName, serialInput, 0, Ch1Dat,Ch2Dat, Ch3Dat, Ch4Dat);
+disp('Plotting...');
+tic
+plotSingleCSV(fName, serialInput, false,fOut);
+toc
+display(sprintf('Done plotting csv file %s',fName));
+
+% Plot Figure(s) with subplot for each Channel
+disp('Maing Histograms...');
+tic
+histSingleCSV(fName, serialInput, false,fOut);
+toc
+display(sprintf('Done making histogram of csv file %s',fName));
+
+% % Plot Figure(s) with subplot for each Channel
+% disp('Plotting...');
+% tic
+% plotFSpec(fName, serialInput, false, fOut)
+% toc
+%display(sprintf('Done plotting frequency spectrum of csv file %s',fName));
 
 end %END ScopeCSVReport (main function)
 
@@ -154,68 +182,162 @@ end %END ScopeCSVReport (main function)
 % Read non-data contents and keep track of position where data starts 
 % *To be completed*
 %
+% (fOut is a struct of the entire file)
 % -------------------------------------------------------------------
-function [Ch1Dat, Ch2Dat, Ch3Dat, Ch4Dat] = readCSVFile(fName)
-%Read file (num contains all numbers, txt contains all text, and raw is a
-%           cell matrix of the entire file)
+function fOut = readCSVFile(fName)
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+% Read file
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+% hack to find where data starts
+% strfind returns the index from which we find the data labels
+%         returns empty array when not found
+% bug: if string 'time' is in the header anywhere except where data
+% starts then this will return the wrong index
+fid = fopen(fName,'r');
+dataInd = 15; %initialize to a value previously found in a scope output
+for i=1:50
+    line = fgets(fid);
+    if line == -1 %reached end of file
+        dataInd = i;
+        break
 
-% tic
-% disp(fName)
-% [raw,~,headerLinesOut] = importdata(fName,',',40);
-% toc
-% disp(raw)
-% disp(headerLinesOut)
-
-tic
-[num,txt,raw] = xlsread(fName);
-toc
-%[~,~,raw] = xlsread(fName); this cut off ~2 seconds for a 100k for 4Chan
-display(sprintf('Done reading csv file %s',fName));
-%Find data characteristics
-numCh = (size(raw,2)-1); %number of channels (one column each for X and Y of data
-hInd = 0; chDatInd = 0; dataInd = 0; labelInd = 0; %initialize
-
-%for loop used rather than a "find()" since datasets can be very large
-%    Note: we search through the 'txt' string array rather than 'raw' cell
-%    array since it is smaller than 'raw'
-for i=1:50 %50 arbitrarily chosen as more than enough to find header
-    if (strcmpi('Horizontal Units',txt(i)))
-        hInd = i; %where header info we care about starts
-    elseif (strcmpi('Gating',txt(i)))
-        chDatInd = i; %where chanel specific header info starts
-    elseif (strcmpi('Label',txt(i)))
-        labelInd = i; %where chanel specific label is
-    elseif (strcmpi('TIME',txt(i)))
-        dataInd = i+1; %i now is just before data
+    elseif strfind(lower(line),'time');
+        dataInd = i;
         break
     end
 end
+% get struct with fOut.data/textdata/colheaders
+fOut = importdata(fName,',',dataInd); 
+%ALT: [num,txt,raw] = xlsread(fName);% importdata() is MUCH faster than xlsread()
+%ALT: [~,~,raw] = xlsread(fName); this cut off ~2 seconds for a 100k for 4Chan
 
-% hUnits = txt(find(strcmp('horizontal units',txt))); alternative example
-hUnits = cell2mat(raw(hInd,2));
-hScale = cell2mat(raw(hInd+1,2));
-hDelay = cell2mat(raw(hInd+2,2));
-sampleInterval = cell2mat(raw(hInd+3,2));
-dataLength = cell2mat(raw(hInd+4,2));
-display(sprintf('Done grabbing header data for %s',fName));
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+% Find data characteristics
+% ***********Need to redo since xlsread replaced with importdata **********
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+fOut.numCh = (size(fOut.data,2)-1); %number of channels: one column each for X and Y of data
+
+%split the single column header text back into columns
+for j=1:dataInd-1 %iter rows; the last row is columns for data already
+    temp_split = regexp(fOut.textdata(j),',','split'); % outputs cell
+    size_tSplit = size(temp_split{:},2); %number of columns of data from row j
+    temp_splitCols = mat2cell(vertcat(temp_split{:}), ...
+        size(fOut.textdata(j),1),ones(1,size_tSplit));
+    for k=1:fOut.numCh+1 % iter columns
+        if (k > size_tSplit | size_tSplit < 1)
+            break
+        else
+            %disp(temp_splitCols{k});
+            fOut.textdata(j,k) = temp_splitCols{k};
+        end
+    end
+end
+%fOut.textdata(:) %debug text
+
+chDatInd = 0;  labelInd = 0; %initialize
+for i=1:dataInd
+    if (strcmpi('Horizontal Units',fOut.textdata{i}))
+        fOut.hUnits = fOut.textdata{i,2};
+        fOut.hScale = fOut.textdata{i+1,2};
+    elseif (strcmpi('Record Length',fOut.textdata{i}))
+        fOut.dataLength = str2num(fOut.textdata{i,2});
+    elseif (strcmpi('Gating',fOut.textdata{i}))
+        chDatInd = i; %where chanel specific header info starts
+    elseif (strcmpi('Label',fOut.textdata{i}))
+        labelInd = i; %where chanel specific label is
+    end
+end
+
+switch fOut.numCh
+    case 4
+        if ~isempty(fOut.textdata(labelInd,2)) 
+                fOut.label1 = strrep(char(fOut.textdata{labelInd,2}),'_','/ ');
+        else    fOut.label1 = 'Ch1';
+        end
+        if ~isempty(fOut.textdata(labelInd,3)) 
+                fOut.label2 = strrep(char(fOut.textdata{labelInd,3}),'_','/ ');
+        else    fOut.label2 = 'Ch2';
+        end
+        if ~isempty(fOut.textdata(labelInd,4)) 
+                fOut.label3 = strrep(char(fOut.textdata{labelInd,4}),'_','/ ');
+        else    fOut.label3 = 'Ch3';
+        end
+        if ~isempty(fOut.textdata(labelInd,5)) 
+                fOut.label4 = strrep(char(fOut.textdata{labelInd,5}),'_','/ ');
+        else    fOut.label4 = 'Ch4';
+        end
+    case 3
+        if ~isempty(fOut.textdata(labelInd,2)) 
+                fOut.label1 = strrep(char(fOut.textdata{labelInd,2}),'_','/ ');
+        else    fOut.label1 = 'Ch1';
+        end
+        if ~isempty(fOut.textdata(labelInd,3)) 
+                fOut.label2 = strrep(char(fOut.textdata{labelInd,3}),'_','/ ');
+        else    fOut.label2 = 'Ch2';
+        end
+        if ~isempty(fOut.textdata(labelInd,4)) 
+                fOut.label3 = strrep(char(fOut.textdata{labelInd,4}),'_','/ ');
+        else    fOut.label3 = 'Ch3';
+        end
+    case 2
+        if ~isempty(fOut.textdata(labelInd,2)) 
+                fOut.label1 = strrep(char(fOut.textdata{labelInd,2}),'_','/ ');
+        else    fOut.label1 = 'Ch1';
+        end
+        if ~isempty(fOut.textdata(labelInd,3)) 
+                fOut.label2 = strrep(char(fOut.textdata{labelInd,3}),'_','/ ');
+        else    fOut.label2 = 'Ch2';
+        end
+    case 1
+        if ~isempty(fOut.textdata(labelInd,2)) 
+                fOut.label1 = strrep(char(fOut.textdata{labelInd,2}),'_','/ ');
+        else    fOut.label1 = 'Ch1';
+        end
+    otherwise
+        error3 = sprintf('Error: Number of Channels not within 1:4');
+        error(error3);
+end
+
+% fOut.textdata(labelInd,:) debug text
+
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+% Find data
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+switch fOut.numCh
+    case 4
+        fOut.Ch1Dat = fOut.data(1:end,[1,2]);
+        fOut.Ch2Dat = fOut.data(1:end,[1,3]);
+        fOut.Ch3Dat = fOut.data(1:end,[1,4]);
+        fOut.Ch4Dat = fOut.data(1:end,[1,5]);
+    case 3
+        fOut.Ch1Dat = fOut.data(1:end,[1,2]);
+        fOut.Ch2Dat = fOut.data(1:end,[1,3]);
+        fOut.Ch3Dat = fOut.data(1:end,[1,4]);
+    case 2
+        fOut.Ch1Dat = fOut.data(1:end,[1,2]);
+        fOut.Ch2Dat = fOut.data(1:end,[1,3]);
+    case 1
+        fOut.Ch1Dat = fOut.data(1:end,[1,2]);
+    otherwise
+        error3 = sprintf('Error: Number of Channels not within 1:4');
+        error(error3);
+end
+
+%OLD CODE
+% hDelay = cell2mat(raw(hInd+2,2));
+% sampleInterval = cell2mat(raw(hInd+3,2));
+% dataLength = cell2mat(raw(hInd+4,2));
+% display(sprintf('Done grabbing header data for %s',fName));
+% 
 % Get Channel dependent info
-chAtten = cell2mat(raw(chDatInd+1,2:numCh+1));
-chVUnits = raw(chDatInd+2,2:numCh+1);
-chVOffset = cell2mat(raw(chDatInd+3,2:numCh+1));
-chVScale = cell2mat(raw(chDatInd+4,2:numCh+1));
-chLabel = raw(chDatInd+5,2:numCh+1);
-
-% READ DATA - Illustrative (not final implementation)
-% !!!Note that this requires four channels of data!!!
-Ch1Dat = cell2mat( raw(dataInd:end,[1,2]) );
-Ch2Dat = cell2mat( raw(dataInd:end,[1,3]) );
-Ch3Dat = cell2mat( raw(dataInd:end,[1,4]) );
-Ch4Dat = cell2mat( raw(dataInd:end,[1,5]) );
+% chAtten = cell2mat(raw(chDatInd+1,2:fOut.numCh+1));
+% chVUnits = raw(chDatInd+2,2:fOut.numCh+1);
+% chVOffset = cell2mat(raw(chDatInd+3,2:fOut.numCh+1));
+% chVScale = cell2mat(raw(chDatInd+4,2:fOut.numCh+1));
+% chLabel = raw(chDatInd+5,2:fOut.numCh+1);
 
 end %END readCSVFile()
-
-
 
 
 %% ------------------------------------------------------------------
@@ -224,30 +346,236 @@ end %END readCSVFile()
 % *To be done*
 %
 % -------------------------------------------------------------------
-function plotSingleCSV(fName, serialInput, inkSaver, ...
-    Ch1Dat,Ch2Dat, Ch3Dat, Ch4Dat)
+function plotSingleCSV(fName, serialInput, inkSaverBool, fOut)
 
-%Setup Figure
+% Setup Figure
 scrsz = get(groot,'ScreenSize'); % get screen size
-fig = figure('position',[100 40 scrsz(3)/2 scrsz(4)-150], ... %take most of left side of screen
-    'name',sprintf('Plot of %s (s/n: %d)',fName, serialInput)); %Window title
-chCol = ['k' 'c' 'm' 'g']; %line colors: black, cyan, magenta, green
-if (inkSaver == 0) 
+if fOut.numCh < 3 %numCh 1 or 2, so make window bigger
+    fig = figure('position', ... %take most of left side of screen
+        [100 40 scrsz(3)/2 (scrsz(4)/4*fOut.numCh)], ... 
+        'name',sprintf('Plot of %s (s/n: %d)',fName, serialInput)); %Window title
+else %numCh 3+, so make window full height
+    fig = figure('position', ... %take most of left side of screen
+        [100 40 scrsz(3)/2 (scrsz(4)/4*fOut.numCh)-150], ... 
+        'name',sprintf('Plot of %s (s/n: %d)',fName, serialInput)); %Window title
+end
+chCol = ['k' 'c' 'm' 'g' 'w']; %line colors: black, cyan, magenta, green
+if (inkSaverBool ~= true) 
     whitebg(fig); %toggle figure bg from white to black/grey
     chCol(1) = 'y'; %change Ch1 from black to yellow #BlackAndYellow
 end
 
 % Plot
-hold on;
-subplot(4,1,1);
-plot(Ch1Dat(:,1),Ch1Dat(:,2),chCol(1));
-subplot(4,1,2);
-plot(Ch2Dat(:,1),Ch2Dat(:,2),chCol(2));
-subplot(4,1,3);
-plot(Ch3Dat(:,1),Ch3Dat(:,2),chCol(3));
-subplot(4,1,4);
-plot(Ch4Dat(:,1),Ch4Dat(:,2),chCol(4));
 % NEEDS LABELS AND CONTEXT INFO
+hold on;
+zero = zeros(1,double(fOut.dataLength));
+switch fOut.numCh
+    case 4
+        subplot(fOut.numCh,1,1);
+        plot(fOut.Ch1Dat(:,1),fOut.Ch1Dat(:,2),chCol(1));
+        hold on;
+        plot(fOut.Ch1Dat(:,1),zero,'LineStyle',':','Color',chCol(5));
+        legend(fOut.label1);
+        xlim([fOut.Ch1Dat(1,1) fOut.Ch1Dat(fOut.dataLength-1,1)]);
+        %line([0 0],ylim,'LineStyle',':','Color',chCol(5));
+        grid on;
+
+        subplot(fOut.numCh,1,2);
+        plot(fOut.Ch2Dat(:,1),fOut.Ch2Dat(:,2),chCol(2));
+        hold on;
+        plot(fOut.Ch2Dat(:,1),zero,'LineStyle',':','Color',chCol(5));
+        legend(fOut.label2);
+        xlim([fOut.Ch2Dat(1,1) fOut.Ch2Dat(fOut.dataLength-1,1)]);
+        %line([0 0],ylim,'LineStyle',':','Color',chCol(5));
+        grid on;
+
+        subplot(fOut.numCh,1,3);
+        plot(fOut.Ch3Dat(:,1),fOut.Ch3Dat(:,2),chCol(3));
+        hold on;
+        plot(fOut.Ch3Dat(:,1),zero,'LineStyle',':','Color',chCol(5));
+        legend(fOut.label3);
+        xlim([fOut.Ch3Dat(1,1) fOut.Ch3Dat(fOut.dataLength-1,1)]);
+        %line([0 0],ylim,'LineStyle',':','Color',chCol(5));
+        grid on;
+
+        subplot(fOut.numCh,1,4);
+        plot(fOut.Ch4Dat(:,1),fOut.Ch4Dat(:,2),chCol(4));
+        hold on;
+        plot(fOut.Ch4Dat(:,1),zero,'LineStyle',':','Color',chCol(5));
+        legend(fOut.label4);
+        xlim([fOut.Ch4Dat(1,1) fOut.Ch4Dat(fOut.dataLength-1,1)]);
+        %line([0 0],ylim,'LineStyle',':','Color',chCol(5));
+        grid on;
+
+    case 3
+        subplot(fOut.numCh,1,1);
+        plot(fOut.Ch1Dat(:,1),fOut.Ch1Dat(:,2),chCol(1));
+        hold on;
+        plot(fOut.Ch1Dat(:,1),zero,'LineStyle',':','Color',chCol(5));
+        legend(fOut.label1);
+        xlim([fOut.Ch1Dat(1,1) fOut.Ch1Dat(fOut.dataLength-1,1)]);
+        %line([0 0],ylim,'LineStyle',':','Color',chCol(5));
+        grid on;
+
+        subplot(fOut.numCh,1,2);
+        plot(fOut.Ch2Dat(:,1),fOut.Ch2Dat(:,2),chCol(2));
+        hold on;
+        plot(fOut.Ch2Dat(:,1),zero,'LineStyle',':','Color',chCol(5));
+        legend(fOut.label2);
+        xlim([fOut.Ch2Dat(1,1) fOut.Ch2Dat(fOut.dataLength-1,1)]);
+        %line([0 0],ylim,'LineStyle',':','Color',chCol(5));
+        grid on;
+
+        subplot(fOut.numCh,1,3);
+        plot(fOut.Ch3Dat(:,1),fOut.Ch3Dat(:,2),chCol(3));
+        hold on;
+        plot(fOut.Ch3Dat(:,1),zero,'LineStyle',':','Color',chCol(5));
+        legend(fOut.label3);
+        xlim([fOut.Ch3Dat(1,1) fOut.Ch3Dat(fOut.dataLength-1,1)]);
+        %line([0 0],ylim,'LineStyle',':','Color',chCol(5));
+        grid on;
+
+    case 2
+        subplot(fOut.numCh,1,1);
+        plot(fOut.Ch1Dat(:,1),fOut.Ch1Dat(:,2),chCol(1));
+        hold on;
+        plot(fOut.Ch1Dat(:,1),zero,'LineStyle',':','Color',chCol(5));
+        legend(fOut.label1);
+        xlim([fOut.Ch1Dat(1,1) fOut.Ch1Dat(fOut.dataLength-1,1)]);
+        %line([0 0],ylim,'LineStyle',':','Color',chCol(5));
+        grid on;
+
+        subplot(fOut.numCh,1,2);
+        plot(fOut.Ch2Dat(:,1),fOut.Ch2Dat(:,2),chCol(2));
+        hold on;
+        plot(fOut.Ch2Dat(:,1),zero,'LineStyle',':','Color',chCol(5));
+        legend(fOut.label2);
+        xlim([fOut.Ch2Dat(1,1) fOut.Ch2Dat(fOut.dataLength-1,1)]);
+        %line([0 0],ylim,'LineStyle',':','Color',chCol(5));
+        grid on;
+
+    case 1
+        plot(fOut.Ch1Dat(:,1),fOut.Ch1Dat(:,2),chCol(1));
+        hold on;
+        plot(fOut.Ch1Dat(:,1),zero,'LineStyle',':','Color',chCol(5));
+        legend(fOut.label1);
+        xlim([fOut.Ch1Dat(1,1) fOut.Ch1Dat(fOut.dataLength-1,1)]);
+        %line([0 0],ylim,'LineStyle',':','Color',chCol(5));
+        grid on;
+
+    otherwise
+        error3 = sprintf('Error: Number of Channels not within 1:4');
+        error(error3);
+end
+
+xlabel(sprintf('Time(%s)',lower(fOut.hUnits)));
 
 end %END plotSingleCSV()
 
+
+%% ------------------------------------------------------------------
+% function histSingleCSV description:
+%
+% *To be done*
+%
+% -------------------------------------------------------------------
+function histSingleCSV(fName, serialInput, inkSaverBool, fOut)
+
+% Setup Figure
+fig = figure('name',sprintf('Histogram of %s (s/n: %d)',fName, serialInput)); %Window title
+
+if (inkSaverBool ~= true) 
+    whitebg(fig); %toggle figure bg from white to black/grey
+end
+
+% Histogram
+% NEEDS LABELS AND CONTEXT INFO
+hold on;
+switch fOut.numCh
+    case 4
+        subplot(fOut.numCh,1,1);
+        histogram(fOut.Ch1Dat(:,2));
+
+        subplot(fOut.numCh,1,2);
+        histogram(fOut.Ch2Dat(:,2));
+
+        subplot(fOut.numCh,1,3);
+        histogram(fOut.Ch3Dat(:,2));
+
+        subplot(fOut.numCh,1,4);
+        histogram(fOut.Ch4Dat(:,2));
+
+    case 3
+        subplot(fOut.numCh,1,1);
+        histogram(fOut.Ch1Dat(:,2));
+
+        subplot(fOut.numCh,1,2);
+        histogram(fOut.Ch2Dat(:,2));
+
+        subplot(fOut.numCh,1,3);
+        histogram(fOut.Ch3Dat(:,2));
+    
+    case 2
+        subplot(fOut.numCh,1,1);
+        histogram(fOut.Ch1Dat(:,2));
+
+        subplot(fOut.numCh,1,2);
+        histogram(fOut.Ch2Dat(:,2));
+        
+    case 1
+        subplot(fOut.numCh,1,1);
+        histogram(fOut.Ch1Dat(:,2));
+        
+    otherwise
+        error3 = sprintf('Error: Number of Channels not within 1:4');
+        error(error3);
+end
+
+end %END histSingleCSV()
+
+
+%% ------------------------------------------------------------------
+% function plotFSpec description:
+% INCOMPLETE
+% *To be done*
+%
+% -------------------------------------------------------------------
+function plotFSpec(fName, serialInput, inkSaverBool, fOut)
+
+%Setup Figure
+scrsz = get(groot,'ScreenSize'); % get screen size
+if fOut.numCh < 3 %numCh 1 or 2, so make window bigger
+    fig = figure('position', ... %take most of left side of screen
+        [100 40 scrsz(3)/2 (scrsz(4)/4*fOut.numCh)], ... 
+        'name',sprintf('Plot of %s (s/n: %d)',fName, serialInput)); %Window title
+else %numCh 3+, so make window full height
+    fig = figure('position', ... %take most of left side of screen
+        [100 40 scrsz(3)/2 (scrsz(4)/4*fOut.numCh)-150], ... 
+        'name',sprintf('Plot of %s (s/n: %d)',fName, serialInput)); %Window title
+end
+chCol = ['k' 'c' 'm' 'g']; %line colors: black, cyan, magenta, green
+if (inkSaverBool ~= true) 
+    whitebg(fig); %toggle figure bg from white to black/grey
+    chCol(1) = 'y'; %change Ch1 from black to yellow #BlackAndYellow
+end
+
+% FFT
+Fs = 1e9; %assume bandwidth of scope is 500Mhz, therefore nyquist is 1G
+T = 1/Fs;
+L = fOut.dataLength;
+t = (0:L-1)*T;
+
+
+% switch fOut.numCh
+%     case 4
+        Y1 = fft(fOut.Ch1Dat);
+        Y1P2 = abs(Y1/L); %two-sided spectrum
+        Y1P1 = Y1P2(1:L/2+1); %single-sided spectrum
+        Y1P1(2:end-1) = 2*Y1P1(2:end-1);
+        f1 = Fs*(0:(L/2))/L;
+        plot(f,Y1P1);
+
+
+xlabel('f(Hz)');
+
+end %END plotFSpec()
