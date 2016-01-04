@@ -147,24 +147,27 @@ end
 disp('Reading...');
 tic
 fOut = readCSVFile(fName);
-toc
 display(sprintf('Done reading csv file %s',fName));
+toc
 
-% Plot Figure(s) with subplot for each Channel
+
+% Plot Figure(s) with subplot plots for each Channel
 disp('Plotting...');
 tic
 plotSingleCSV(fName, serialInput, false,fOut);
-toc
 display(sprintf('Done plotting csv file %s',fName));
+toc
 
-% Plot Figure(s) with subplot for each Channel
+
+% Plot Figure(s) with subplot histograms for each Channel
 disp('Maing Histograms...');
 tic
 histSingleCSV(fName, serialInput, false,fOut);
-toc
 display(sprintf('Done making histogram of csv file %s',fName));
+toc
 
-% % Plot Figure(s) with subplot for each Channel
+
+% % Plot Figure(s) with subplot frequency spectrum plots for each Channel
 % disp('Plotting...');
 % tic
 % plotFSpec(fName, serialInput, false, fOut)
@@ -213,8 +216,8 @@ fOut = importdata(fName,',',dataInd);
 
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 % Find data characteristics
-% ***********Need to redo since xlsread replaced with importdata **********
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+% ***********Need to redo since xlsread replaced with importdata **********
 
 fOut.numCh = (size(fOut.data,2)-1); %number of channels: one column each for X and Y of data
 
@@ -252,46 +255,46 @@ end
 switch fOut.numCh
     case 4
         if ~isempty(fOut.textdata(labelInd,2)) 
-                fOut.label1 = strrep(char(fOut.textdata{labelInd,2}),'_','/ ');
+                fOut.label1 = strrep(char(fOut.textdata{labelInd,2}),'_','-');
         else    fOut.label1 = 'Ch1';
         end
         if ~isempty(fOut.textdata(labelInd,3)) 
-                fOut.label2 = strrep(char(fOut.textdata{labelInd,3}),'_','/ ');
+                fOut.label2 = strrep(char(fOut.textdata{labelInd,3}),'_','-');
         else    fOut.label2 = 'Ch2';
         end
         if ~isempty(fOut.textdata(labelInd,4)) 
-                fOut.label3 = strrep(char(fOut.textdata{labelInd,4}),'_','/ ');
+                fOut.label3 = strrep(char(fOut.textdata{labelInd,4}),'_','-');
         else    fOut.label3 = 'Ch3';
         end
         if ~isempty(fOut.textdata(labelInd,5)) 
-                fOut.label4 = strrep(char(fOut.textdata{labelInd,5}),'_','/ ');
+                fOut.label4 = strrep(char(fOut.textdata{labelInd,5}),'_','-');
         else    fOut.label4 = 'Ch4';
         end
     case 3
         if ~isempty(fOut.textdata(labelInd,2)) 
-                fOut.label1 = strrep(char(fOut.textdata{labelInd,2}),'_','/ ');
+                fOut.label1 = strrep(char(fOut.textdata{labelInd,2}),'_','-');
         else    fOut.label1 = 'Ch1';
         end
         if ~isempty(fOut.textdata(labelInd,3)) 
-                fOut.label2 = strrep(char(fOut.textdata{labelInd,3}),'_','/ ');
+                fOut.label2 = strrep(char(fOut.textdata{labelInd,3}),'_','-');
         else    fOut.label2 = 'Ch2';
         end
         if ~isempty(fOut.textdata(labelInd,4)) 
-                fOut.label3 = strrep(char(fOut.textdata{labelInd,4}),'_','/ ');
+                fOut.label3 = strrep(char(fOut.textdata{labelInd,4}),'_','-');
         else    fOut.label3 = 'Ch3';
         end
     case 2
         if ~isempty(fOut.textdata(labelInd,2)) 
-                fOut.label1 = strrep(char(fOut.textdata{labelInd,2}),'_','/ ');
+                fOut.label1 = strrep(char(fOut.textdata{labelInd,2}),'_','-');
         else    fOut.label1 = 'Ch1';
         end
         if ~isempty(fOut.textdata(labelInd,3)) 
-                fOut.label2 = strrep(char(fOut.textdata{labelInd,3}),'_','/ ');
+                fOut.label2 = strrep(char(fOut.textdata{labelInd,3}),'_','-');
         else    fOut.label2 = 'Ch2';
         end
     case 1
         if ~isempty(fOut.textdata(labelInd,2)) 
-                fOut.label1 = strrep(char(fOut.textdata{labelInd,2}),'_','/ ');
+                fOut.label1 = strrep(char(fOut.textdata{labelInd,2}),'_','-');
         else    fOut.label1 = 'Ch1';
         end
     otherwise
