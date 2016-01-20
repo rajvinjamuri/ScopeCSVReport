@@ -49,6 +49,9 @@ function ScopeCSVReport
 
 %% Clear the workspace 
 clear all %#ok<CLSCR>
+% Normally adding a sheet triggers a warning, so supress it, since this
+% is what we want to happen
+warning('off','MATLAB:xlswrite:AddSheet');
 % clc
 
 %% TO DO - incomplete: Give user dialog box of how-to or instructions
@@ -64,13 +67,40 @@ uiwait(msgbox(howText,howTitle,'modal'));
 prompt = 'Enter Number of Files to Process: ';
 % Note: inputdlg() returns a cell but we want just a number
 numFiles = str2num(cell2mat(inputdlg(prompt)));
-fName = ''; %initialize
+
+%initialize
+fName = '';
+cdUp = 0;
 
 % User wants to process multiple files
 if (numFiles > 1)
     dirName = uigetdir('C:\','Select directory that data is located');
-    addpath(dirName);
-
+    curDir = pwd;
+    addpath(dirName); %not really needed. Added just in case
+    cd(dirName);
+    if ~strcmp(pwd,curDir)
+        cdUp = 1; %at the end of hte function, cd back up
+    end
+    
+    %Get all the file names
+    files = dir(fullfile(dirName,'*.csv'));% dir() returns a struct of files with name.date.bytes.isdir.datenum
+    numDirFiles = numel(files);
+    if numDirFiles ~= numFiles
+        warning0 = sprintf('WARNING: User entered %i files ~= %i files available in directory.\nReading %i files.',...
+            numFiles,numDirFiles,numFiles);
+        uiwait(msgbox(warning0,'Warning','modal'));
+    end
+    
+    % TO DO: Allocate Office summary output space based on numFiles
+    % ~~~~~~~~~
+    %
+    
+%     %sort alphabetically
+%     %(dir sorts already but puts uppercase letters before lowercase)
+%     fName = files.name; %temp grab of file names **DOES NOT WORK**
+%     [~, fid] = sort(lower(fName)); %lower changes the array to lowercase so ignore the output
+%     fName = fName(fid);
+    
     %Get multiple serial numbers
     prompt = 'Enter space-separated UUT ID/Serial Numbers';
     userInput = inputdlg(prompt,'Data ID');
@@ -99,17 +129,6 @@ if (numFiles > 1)
         warning2 = sprintf('WARNING: Idendical serial #s entered. Extra/Missing entries auto-corrected.');
         uiwait(msgbox(warning2,'Warning','modal'));
     end
-    
-    %Get all the file names
-    
-    % Returns a struct of files with name.date.bytes.isdir.datenum
-    files = dir(fullfile(dirName,'*.csv'));
-    %sort alphabetically
-    %(dir sorts already but puts uppercase letters before lowercase)
-    fName = files.name; %temp grab of file names
-    [~, fid] = sort(lower(fName)); %lower changes the array to lowercase so ignore the output
-    fName = fName(fid);
-    
     
 
 % User wants to process single file
@@ -142,37 +161,65 @@ else
     error(error2);
 end
 
+%% Use the retrieved CSV data
 
-%Read file to workspace
-disp('Reading...');
-tic
-fOut = readCSVFile(fName);
-display(sprintf('Done reading csv file %s',fName));
-toc
-
-
-% Plot Figure(s) with subplot plots for each Channel
-disp('Plotting...');
-tic
-plotSingleCSV(fName, serialInput, false,fOut);
-display(sprintf('Done plotting csv file %s',fName));
-toc
+if (numFiles == 1)
+    %Read file to workspace
+    disp('Reading...');
+    tic
+    fOut = readCSVFile(fName);
+    display(sprintf('Done reading csv file %s',fName));
+    toc
 
 
-% Plot Figure(s) with subplot histograms for each Channel
-disp('Maing Histograms...');
-tic
-histSingleCSV(fName, serialInput, false,fOut);
-display(sprintf('Done making histogram of csv file %s',fName));
-toc
+    % Plot Figure(s) with subplot plots for each Channel
+    disp('Plotting...');
+    tic
+    plotSingleCSV(fName, serialInput, false,fOut);
+    display(sprintf('Done plotting csv file %s',fName));
+    toc
 
 
-% % Plot Figure(s) with subplot frequency spectrum plots for each Channel
-% disp('Plotting...');
-% tic
-% plotFSpec(fName, serialInput, false, fOut)
-% toc
-%display(sprintf('Done plotting frequency spectrum of csv file %s',fName));
+    % Plot Figure(s) with subplot histograms for each Channel
+    disp('Maing Histograms...');
+    tic
+    histSingleCSV(fName, serialInput, false,fOut);
+    display(sprintf('Done making histogram of csv file %s',fName));
+    toc
+
+    % % Plot Figure(s) with subplot frequency spectrum plots for each Channel
+    % disp('Plotting...');
+    % tic
+    % plotFSpec(fName, serialInput, false, fOut)
+    % toc
+    %display(sprintf('Done plotting frequency spectrum of csv file %s',fName));
+elseif (numFiles > 1)
+    tic
+    for n=1:numFiles
+        display(sprintf('Processing %s',files(n).name));
+        %Read files to workspace
+        fOut = readCSVFile(files(n).name);
+
+        %Plot Figure(s) with subplot plots for each Channel
+        plotSingleCSV(files(n).name, serialInput, false,fOut);
+
+        %Plot Figure(s) with subplot histograms for each Channel
+        histSingleCSV(files(n).name, serialInput, false,fOut);
+
+%         % Plot Figure(s) with subplot frequency spectrum plots for each Channel
+%         disp('Plotting...');
+%         tic
+%         plotFSpec(fName, serialInput, false, fOut)
+%         toc
+%         display(sprintf('Done plotting frequency spectrum of csv file %s',fName));
+    end
+        toc
+end
+
+%% change back to original directory
+if cdUp == 1
+    cd ../
+end
 
 end %END ScopeCSVReport (main function)
 
@@ -486,10 +533,24 @@ function histSingleCSV(fName, serialInput, inkSaverBool, fOut)
 
 % Setup Figure
 fig = figure('name',sprintf('Histogram of %s (s/n: %d)',fName, serialInput)); %Window title
+% TODO: Resize histogram to right side of screen. This is left side stuff:
+% scrsz = get(groot,'ScreenSize'); % get screen size
+% if fOut.numCh < 3 %numCh 1 or 2, so make window bigger
+%     fig = figure('position', ... %take most of left side of screen
+%         [100 40 scrsz(3)/2 (scrsz(4)/4*fOut.numCh)], ... 
+%         'name',sprintf('Histogram of %s (s/n: %d)',fName, serialInput)); %Window title
+% else %numCh 3+, so make window full height
+%     fig = figure('position', ... %take most of left side of screen
+%         [100 40 scrsz(3)/2 (scrsz(4)/4*fOut.numCh)-150], ... 
+%         'name',sprintf('Histogram of %s (s/n: %d)',fName, serialInput)); %Window title
+% end
 
+% chCol = ['k' 'c' 'm' 'g' 'w']; %line colors: black, cyan, magenta, green
 if (inkSaverBool ~= true) 
     whitebg(fig); %toggle figure bg from white to black/grey
+%     chCol(1) = 'y'; %change Ch1 from black to yellow #BlackAndYellow
 end
+
 
 % Histogram
 % NEEDS LABELS AND CONTEXT INFO
@@ -533,6 +594,10 @@ switch fOut.numCh
         error3 = sprintf('Error: Number of Channels not within 1:4');
         error(error3);
 end
+
+% TODO: MAKE THIS UNIVERSAL
+xlabel('Voltage');
+ylabel('n');
 
 end %END histSingleCSV()
 

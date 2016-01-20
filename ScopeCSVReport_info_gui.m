@@ -22,7 +22,7 @@ function varargout = ScopeCSVReport_info_gui(varargin)
 
 % Edit the above text to modify the response to help ScopeCSVReport_info_gui
 
-% Last Modified by GUIDE v2.5 02-Dec-2015 15:25:09
+% Last Modified by GUIDE v2.5 20-Jan-2016 07:02:00
 
 % Begin initialization code - [DO NOT EDIT]
 gui_Singleton = 1;
@@ -361,3 +361,53 @@ function singleFileSel_but_ButtonDownFcn(hObject, eventdata, handles)
 % hObject    handle to singleFileSel_but (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in spect_checkbox.
+function spectral_analysis_checkbox_Callback(hObject, eventdata, handles)
+% hObject    handle to spect_checkbox (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of spect_checkbox
+
+
+% --- Executes on button press in spect_checkbox.
+function spect_checkbox_Callback(hObject, eventdata, handles)
+% hObject    handle to spect_checkbox (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of spect_checkbox
+
+
+% --- Executes on button press in notch_checkbox.
+function notch_checkbox_Callback(hObject, eventdata, handles)
+% hObject    handle to notch_checkbox (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of notch_checkbox
+
+
+
+function notch_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to notch_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of notch_edit as text
+%        str2double(get(hObject,'String')) returns contents of notch_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function notch_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to notch_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
