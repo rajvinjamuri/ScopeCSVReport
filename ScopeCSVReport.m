@@ -37,14 +37,17 @@ function ScopeCSVReport
 % Change warnings to include warning dialog boxes (msgbox with warning flag)
 % Seek for time in multiple columns for other scopes
 % Output statistics with histogram like in minitab
-%
-%
+% Chose Specific files in directory (choose multiple, but not all)
+% Compare files
+%      Overlap Waveform option
+% Save option to save figures
 %
 %
 % DONE (many features just added on the fly and not lsited):
 % Handle empty channels (eg. Ch1,2,4 used and 3 unused) data sets
 % Increase the window size from default window size of plots
 % Generate number of plots dependent on number of channels
+% Read in multiple files
 % -------------------------------------------------------------------
 
 %% Clear the workspace 
@@ -302,8 +305,9 @@ end
 switch fOut.numCh
     case 4
         if ~isempty(fOut.textdata(labelInd,2)) 
+                % Replace underscore with dash to prevent matlab interpreting as a subscript
                 fOut.label1 = strrep(char(fOut.textdata{labelInd,2}),'_','-');
-        else    fOut.label1 = 'Ch1';
+        else    fOut.label1 = 'Ch1'; % Default label to Channel number
         end
         if ~isempty(fOut.textdata(labelInd,3)) 
                 fOut.label2 = strrep(char(fOut.textdata{labelInd,3}),'_','-');
@@ -416,7 +420,7 @@ if (inkSaverBool ~= true)
 end
 
 % Plot
-% NEEDS LABELS AND CONTEXT INFO
+% TO DO: NEEDS LABELS AND CONTEXT INFO
 hold on;
 zero = zeros(1,double(fOut.dataLength));
 switch fOut.numCh
@@ -604,7 +608,7 @@ end %END histSingleCSV()
 
 %% ------------------------------------------------------------------
 % function plotFSpec description:
-% INCOMPLETE
+% INCOMPLETE FUNCTION...DOES NOT WORK YET
 % *To be done*
 %
 % -------------------------------------------------------------------
